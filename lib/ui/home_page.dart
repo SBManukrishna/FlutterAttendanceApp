@@ -1,8 +1,11 @@
 import 'package:calendar_timeline/calendar_timeline.dart';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:student_attendance/providers/attendance_provider.dart';
 import 'package:student_attendance/models/student_model.dart';
+import 'package:student_attendance/ui/attendance_line_chart.dart';
 import 'package:student_attendance/ui/student_details.dart';
 
 class HomePage extends StatefulWidget {
@@ -24,6 +27,28 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Map<DateTime, int> buildAttendanceDataFromHive() {
+    final attendanceData = <DateTime, int>{};
+    final historyBox = Hive.box<Map>('studentAttendanceHistory');
+
+    // Iterate through all the students in historyBox
+    for (final studentName in historyBox.keys) {
+      final history = historyBox.get(studentName, defaultValue: {}) as Map;
+
+      // Iterate through each date the student was marked as present or absent
+      history.forEach((dateKey, status) {
+        final date = DateTime.parse(dateKey);  // Convert string to DateTime
+        if (status == 'P') {
+          // If the status is "P", increment the present count for that date
+          attendanceData.update(date, (count) => count + 1, ifAbsent: () => 1);
+        }
+      });
+    }
+
+    return attendanceData;
+  }
+
+
 
   @override
   void initState() {
@@ -40,8 +65,22 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
+        title: const Text('Attendance Dashboard'),
         backgroundColor: Colors.black,
-        title: Text("Class Attendance"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.show_chart),
+            onPressed: () {
+              final attendanceData = buildAttendanceDataFromHive();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AttendanceStickChart(attendanceData: attendanceData),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -67,14 +106,14 @@ class _HomePageState extends State<HomePage> {
                     provider.markAllPresent(selectedDate);
                     _loadAttendance(context, selectedDate);
                   },
-                  child: Text("Mark Attendance"),
+                  child: Text("Mark Attendance",style: TextStyle(color: Colors.blue.shade100),),
                 ),
                 ElevatedButton(
                   onPressed: () {
                     provider.deleteAttendance(selectedDate);
                     _loadAttendance(context, selectedDate);
                   },
-                  child: Icon(Icons.delete),
+                  child: Icon(Icons.delete,color: Colors.blue.shade100,),
                 ),
               ],
             ),
@@ -83,9 +122,20 @@ class _HomePageState extends State<HomePage> {
           Expanded(
             child: _attendanceList.isEmpty
                 ? Center(
-              child: Text(
-                'No attendance marked for this date',
-                style: TextStyle(color: Colors.white),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Lottie.asset(
+                    'assets/attendance_animation.json', // Path to your JSON animation file
+                    width: 250,  // Adjust the size as needed
+                    height: 250,
+                    fit: BoxFit.fill,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 200.0),
+                    child: Text("No attendance !",style: TextStyle(fontSize: 25,fontWeight: FontWeight.bold),),
+                  )
+                ],
               ),
             )
                 : ListView.builder(
